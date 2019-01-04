@@ -24,7 +24,7 @@ namespace WindowsFormsApplication1
         static int height = bmp.Height;
         //邊緣位置
         static int[,] sobel = new int[height, width];
-        //處理中影像二維
+        //處理中影像二維(較快)
         static int[,] processpix = new int[height, width];
 
         private void Form1_Load(object sender, EventArgs e)
@@ -33,11 +33,11 @@ namespace WindowsFormsApplication1
             Bitmap processbmp = new Bitmap(bmp);
             pictureBox1.Image = Image.FromFile(filepath);
             Grayscale(processbmp);
-            Sobel(processbmp);
+            Sobel(processpix);
             //Sharpen(bmp);
-            SetEdge(processbmp);
-            Bilevel(processbmp);
-            
+            SetEdge(processpix);
+            Bilevel(processpix);
+            WritePixel(processpix, processbmp);
             //load image in picturebox
             pictureBox2.Image = processbmp;
             ;
@@ -61,13 +61,14 @@ namespace WindowsFormsApplication1
                     int A = pixel.A;
 
                     int Gray = (R + G + B) / 3;
-                    img.SetPixel(x, y, Color.FromArgb(A, Gray, Gray, Gray));
+                    processpix[y, x] = Gray;
+                    //img.SetPixel(x, y, Color.FromArgb(A, Gray, Gray, Gray));
                 }
             }
             
         }
 
-        public void Sobel(Bitmap img)
+        public void Sobel(int[,] img)
         {
             //邊緣偵測
             int[] maskx = { -1, 0, 1, -2, 0, 2, -1, 0, 1 };
@@ -88,8 +89,8 @@ namespace WindowsFormsApplication1
                     {
                         for (int b = y - 1; b <= y + 1; b++)
                         {
-                            sobelx += maskx[count] * img.GetPixel(a, b).R;
-                            sobely += masky[count] * img.GetPixel(a, b).R;
+                            sobelx += maskx[count] * img[b,a];
+                            sobely += masky[count] * img[b,a];
                             count++;
                         }
                     }
@@ -99,10 +100,10 @@ namespace WindowsFormsApplication1
                     sobel[y, x] = result;
                 }
             }
-            WritePixel(sobel,img);
+            //WritePixel(sobel,img);
         }
 
-        public void Sharpen(Bitmap img)
+        public void Sharpen(int[,] img)
         {
             //銳化
             int[] Laplacian = { -1, -1, -1, -1, 9, -1, -1, -1, -1 };
@@ -118,19 +119,20 @@ namespace WindowsFormsApplication1
                     {
                         for (int b = x - 1; b <= x + 1; b++)
                         {
-                            laplace += Laplacian[count] * img.GetPixel(x, y).R;
+                            laplace += Laplacian[count] * img[a, b];
                             count++;
                         }
                     }
                     if (laplace > 255) laplace = 255;
                     if (laplace < 0) laplace = 0;
                     //laplacian[y, x] = laplace;
-                    img.SetPixel(x, y, Color.FromArgb(img.GetPixel(x, y).A, laplace, laplace, laplace));
+                    img[y, x] = laplace;
+                    //img.SetPixel(x, y, Color.FromArgb(img.GetPixel(x, y).A, laplace, laplace, laplace));
                 }
             }
         }
 
-        public int Threshold(Bitmap img)
+        public int Threshold(int[,] img)
         {
             //找閾值
             int maxColor = 0;
@@ -140,9 +142,9 @@ namespace WindowsFormsApplication1
             {
                 for(int x = 0; x < width; x++)
                 {
-                    histogram[img.GetPixel(x, y).R]++;
-                    if (img.GetPixel(x, y).R > maxColor) maxColor = img.GetPixel(x, y).R;
-                    if (img.GetPixel(x, y).R < minColor) minColor = img.GetPixel(x, y).R;
+                    histogram[img[y, x]]++;
+                    if (img[y, x] > maxColor) maxColor = img[y, x];
+                    if (img[y, x] < minColor) minColor = img[y, x];
                 }
             }
             int T= (maxColor - minColor) / 2;
@@ -165,39 +167,40 @@ namespace WindowsFormsApplication1
             return (PixelA2 + PixelA1) / 2;
         }
 
-        public void Bilevel(Bitmap img)
+        public void Bilevel(int[,] img)
         {
             //二值化
             int T = Threshold(img);
-            int pixel;
+            int pix;
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    if (img.GetPixel(x, y).R < T) pixel = 0;
-                    else pixel = 255;
-                    img.SetPixel(x, y, Color.FromArgb(img.GetPixel(x, y).A, pixel, pixel, pixel));
+                    if (img[y, x] < T) pix = 0;
+                    else pix = 255;
+                    processpix[y, x] = pix;
+                    //img.SetPixel(x, y, Color.FromArgb(img.GetPixel(x, y).A, pixel, pixel, pixel));
                 }
             }
         }
 
-        public void SetEdge(Bitmap img)
+        public void SetEdge(int[,] img)
         {
             int sobelT = Threshold(img);
-            int pixel;
+            int pix;
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    if (isEdge(x, y, sobelT,img))
+                    if (isEdge(x, y, sobelT-80))//讓邊緣更明顯
                     {
-                        pixel = 0;
-                        img.SetPixel(x, y, Color.FromArgb(img.GetPixel(x, y).A, pixel, pixel, pixel));
+                        pix = 0;
+                        processpix[y, x] = pix;
                     }
                 }
             }
         }
-        public Boolean isEdge(int x , int y, int T, Bitmap img)
+        public Boolean isEdge(int x , int y, int T)
         {
             //邊緣強化
             if (sobel[y,x]> T) return true;
